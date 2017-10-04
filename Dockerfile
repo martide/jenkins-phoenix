@@ -13,6 +13,7 @@ RUN set -ex; \
 		autoconf \
 		automake \
 		bzip2 \
+		dpkg-dev \
 		file \
 		g++ \
 		gcc \
@@ -60,18 +61,18 @@ RUN set -ex; \
 	rm -rf /var/lib/apt/lists/*
 
 ######################################################################
-# https://github.com/c0b/docker-erlang-otp/blob/master/19/Dockerfile #
+# https://github.com/c0b/docker-erlang-otp/blob/master/20/Dockerfile #
 ######################################################################
-ENV OTP_VERSION="19.3.6.1"
+ENV OTP_VERSION="20.1.1"
 
 # We'll install the build dependencies for erlang-odbc along with the erlang
 # build process:
 RUN set -xe \
 	&& OTP_DOWNLOAD_URL="https://github.com/erlang/otp/archive/OTP-${OTP_VERSION}.tar.gz" \
-	&& OTP_DOWNLOAD_SHA256="5cdb0dd2d6d6e1bd805d36fca1d9b15b02501c8044526b25cb0e5b869a6f52ab" \
+	&& OTP_DOWNLOAD_SHA256="1f997c0c8aaa6217dcfc1dc0901717438cb2b63d4c20191f0d3d5c1bf61d4d5c" \
 	&& runtimeDeps='libodbc1 \
 			libsctp1 \
-			libwxgtk3.0-0' \
+			libwxgtk3.0' \
 	&& buildDeps='unixodbc-dev \
 			libsctp-dev \
 			libwxgtk3.0-dev' \
@@ -79,20 +80,20 @@ RUN set -xe \
 	&& apt-get install -y --no-install-recommends $runtimeDeps \
 	&& apt-get install -y --no-install-recommends $buildDeps \
 	&& curl -fSL -o otp-src.tar.gz "$OTP_DOWNLOAD_URL" \
-	&& echo "$OTP_DOWNLOAD_SHA256 otp-src.tar.gz" | sha256sum -c - \
-	&& mkdir -p /usr/src/otp-src \
-	&& tar -xzf otp-src.tar.gz -C /usr/src/otp-src --strip-components=1 \
+	&& echo "$OTP_DOWNLOAD_SHA256  otp-src.tar.gz" | sha256sum -c - \
+	&& export ERL_TOP="/usr/src/otp_src_${OTP_VERSION%%@*}" \
+	&& mkdir -vp $ERL_TOP \
+	&& tar -xzf otp-src.tar.gz -C $ERL_TOP --strip-components=1 \
 	&& rm otp-src.tar.gz \
-	&& cd /usr/src/otp-src \
-	&& ./otp_build autoconf \
-	&& ./configure \
-		--enable-sctp \
-		--enable-dirty-schedulers \
-	&& make -j$(nproc) \
-	&& make install \
+	&& ( cd $ERL_TOP \
+	  && ./otp_build autoconf \
+	  && gnuArch="$(dpkg-architecture --query DEB_BUILD_GNU_TYPE)" \
+	  && ./configure --build="$gnuArch" \
+	  && make -j$(nproc) \
+	  && make install ) \
 	&& find /usr/local -name examples | xargs rm -rf \
 	&& apt-get purge -y --auto-remove $buildDeps \
-	&& rm -rf /usr/src/otp-src /var/lib/apt/lists/*
+	&& rm -rf $ERL_TOP /var/lib/apt/lists/*
 
 CMD ["erl"]
 
@@ -113,11 +114,11 @@ RUN set -xe \
 	&& install -v ./rebar /usr/local/bin/ \
 	&& rm -rf /usr/src/rebar-src
 
-ENV REBAR3_VERSION="3.4.1"
+ENV REBAR3_VERSION="3.4.4"
 
 RUN set -xe \
 	&& REBAR3_DOWNLOAD_URL="https://github.com/erlang/rebar3/archive/${REBAR3_VERSION}.tar.gz" \
-	&& REBAR3_DOWNLOAD_SHA256="fa8b056c37ed3781728baf0fc5b1d87a31edbc5f8dd9b50a5d1ad92b0230e5dd" \
+	&& REBAR3_DOWNLOAD_SHA256="0f7c860489dc4e4fcdc706a04690f791755870ff0e0582525b8ee9a78e911443" \
 	&& mkdir -p /usr/src/rebar3-src \
 	&& curl -fSL -o rebar3-src.tar.gz "$REBAR3_DOWNLOAD_URL" \
 	&& echo "$REBAR3_DOWNLOAD_SHA256 rebar3-src.tar.gz" | sha256sum -c - \
@@ -129,30 +130,26 @@ RUN set -xe \
 	&& rm -rf /usr/src/rebar3-src
 
 ###################################################################
-# https://github.com/c0b/docker-elixir/blob/master/1.4/Dockerfile #
+# https://github.com/c0b/docker-elixir/blob/master/1.5/Dockerfile #
 ###################################################################
 # elixir expects utf8.
-ENV ELIXIR_VERSION="v1.4.5" \
+ENV ELIXIR_VERSION="v1.5.2" \
 	LANG=C.UTF-8
 
 RUN set -xe \
-	&& ELIXIR_DOWNLOAD_URL="https://github.com/elixir-lang/elixir/releases/download/${ELIXIR_VERSION}/Precompiled.zip" \
-	&& ELIXIR_DOWNLOAD_SHA256="a740e634e3c68b1477e16d75a0fd400237a46c62ceb5d04551dbc46093a03f98"\
-	&& buildDeps=' \
-		unzip \
-	' \
-	&& apt-get update \
-	&& apt-get install -y --no-install-recommends $buildDeps \
-	&& curl -fSL -o elixir-precompiled.zip $ELIXIR_DOWNLOAD_URL \
-	&& echo "$ELIXIR_DOWNLOAD_SHA256 elixir-precompiled.zip" | sha256sum -c - \
-	&& unzip -d /usr/local elixir-precompiled.zip \
-	&& rm elixir-precompiled.zip \
-	&& apt-get purge -y --auto-remove $buildDeps \
-	&& rm -rf /var/lib/apt/lists/*
+	&& ELIXIR_DOWNLOAD_URL="https://github.com/elixir-lang/elixir/archive/${ELIXIR_VERSION}.tar.gz" \
+	&& ELIXIR_DOWNLOAD_SHA256="7317b7a9d3b5bef2b5cd56de738f2b37fd4111e24efbe71a3e39bea1b702ff6c" \
+	&& curl -fSL -o elixir-src.tar.gz $ELIXIR_DOWNLOAD_URL \
+	&& echo "$ELIXIR_DOWNLOAD_SHA256  elixir-src.tar.gz" | sha256sum -c - \
+	&& mkdir -p /usr/local/src/elixir \
+	&& tar -xzC /usr/local/src/elixir --strip-components=1 -f elixir-src.tar.gz \
+	&& rm elixir-src.tar.gz \
+	&& cd /usr/local/src/elixir \
+	&& make install clean
 
-#####################################################################
-# https://github.com/nodejs/docker-node/blob/master/6.11/Dockerfile #
-#####################################################################
+####################################################################
+# https://github.com/nodejs/docker-node/blob/master/8.6/Dockerfile #
+####################################################################
 RUN groupadd --gid 1000 node \
   && useradd --uid 1000 --gid node --shell /bin/bash --create-home node
 
@@ -174,17 +171,26 @@ RUN set -ex \
   done
 
 ENV NPM_CONFIG_LOGLEVEL info
-ENV NODE_VERSION 6.11.0
+ENV NODE_VERSION 8.6.0
 
-RUN curl -SLO "https://nodejs.org/dist/v$NODE_VERSION/node-v$NODE_VERSION-linux-x64.tar.xz" \
+RUN ARCH= && dpkgArch="$(dpkg --print-architecture)" \
+  && case "${dpkgArch##*-}" in \
+    amd64) ARCH='x64';; \
+    ppc64el) ARCH='ppc64le';; \
+    s390x) ARCH='s390x';; \
+    arm64) ARCH='arm64';; \
+    armhf) ARCH='armv7l';; \
+    *) echo "unsupported architecture"; exit 1 ;; \
+  esac \
+  && curl -SLO "https://nodejs.org/dist/v$NODE_VERSION/node-v$NODE_VERSION-linux-$ARCH.tar.xz" \
   && curl -SLO --compressed "https://nodejs.org/dist/v$NODE_VERSION/SHASUMS256.txt.asc" \
   && gpg --batch --decrypt --output SHASUMS256.txt SHASUMS256.txt.asc \
-  && grep " node-v$NODE_VERSION-linux-x64.tar.xz\$" SHASUMS256.txt | sha256sum -c - \
-  && tar -xJf "node-v$NODE_VERSION-linux-x64.tar.xz" -C /usr/local --strip-components=1 \
-  && rm "node-v$NODE_VERSION-linux-x64.tar.xz" SHASUMS256.txt.asc SHASUMS256.txt \
+  && grep " node-v$NODE_VERSION-linux-$ARCH.tar.xz\$" SHASUMS256.txt | sha256sum -c - \
+  && tar -xJf "node-v$NODE_VERSION-linux-$ARCH.tar.xz" -C /usr/local --strip-components=1 \
+  && rm "node-v$NODE_VERSION-linux-$ARCH.tar.xz" SHASUMS256.txt.asc SHASUMS256.txt \
   && ln -s /usr/local/bin/node /usr/local/bin/nodejs
 
-ENV YARN_VERSION 0.24.6
+ENV YARN_VERSION 1.1.0
 
 RUN set -ex \
   && for key in \
